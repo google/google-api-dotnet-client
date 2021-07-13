@@ -120,6 +120,12 @@ namespace Google.Apis.Auth
             [JsonProperty("typ")]
             public string Type { get; set; }
 
+            /// <summary>
+            /// A space-delimited list of the permissions the application requests or <c>null</c>.
+            /// </summary>
+            [JsonProperty("scope")]
+            public string Scope { get; set; }
+
             /// <summary>Gets the audience property as a list.</summary>
             [JsonIgnore]
             public IEnumerable<string> AudienceAsList

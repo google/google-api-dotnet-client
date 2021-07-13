@@ -297,6 +297,66 @@ ZUp8AsbVqF6rbLiiUfJMo2btGclQu4DEVyS+ymFA65tXDLUuR9EDqJYdqHNZJ5B8
             Assert.NotSame(jwt0, jwt0Uncached);
         }
 
+        [Fact]
+        public async Task JwtScopes_Disabled_NoScopes_UseAud()
+        {
+            var clock = new MockClock(new DateTime(2016, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+            var initializer = new ServiceAccountCredential.Initializer("some-id")
+            {
+                Clock = clock
+            }.FromPrivateKey(PrivateKey);
+            var cred = new ServiceAccountCredential(initializer);
+            Assert.False(cred.HasExplicitScopes); // Must be false for the remainder of this test to be valid.
+            Assert.False(cred.UseJwtAccessWithScope);
+
+            var jwt0 = await cred.GetAccessTokenForRequestAsync("uri0");
+            byte[] decoded = TokenEncodingHelpers.Base64UrlDecode(jwt0.Split(new char[] { '.' })[1]);
+            string payload = System.Text.Encoding.UTF8.GetString(decoded);
+            Assert.Contains("\"aud\":\"uri0\"", payload);
+            Assert.DoesNotContain("scope", payload);
+        }
+
+        [Fact]
+        public async Task JwtScopes_Enabled_NoScopes_UseAud()
+        {
+            var clock = new MockClock(new DateTime(2016, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+            var initializer = new ServiceAccountCredential.Initializer("some-id")
+            {
+                UseJwtAccessWithScope = true,
+                Clock = clock
+            }.FromPrivateKey(PrivateKey);
+            var cred = new ServiceAccountCredential(initializer);
+            Assert.False(cred.HasExplicitScopes); // Must be false for the remainder of this test to be valid.
+            Assert.True(cred.UseJwtAccessWithScope);
+
+            var jwt0 = await cred.GetAccessTokenForRequestAsync("uri0");
+            byte[] decoded = TokenEncodingHelpers.Base64UrlDecode(jwt0.Split(new char[] { '.' })[1]);
+            string payload = System.Text.Encoding.UTF8.GetString(decoded);
+            Assert.Contains("\"aud\":\"uri0\"", payload);
+            Assert.DoesNotContain("scope", payload);
+        }
+
+        [Fact]
+        public async Task JwtScopes_Enabled_WithScopes_UseScopes()
+        {
+            var clock = new MockClock(new DateTime(2016, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+            var initializer = new ServiceAccountCredential.Initializer("some-id")
+            {
+                UseJwtAccessWithScope = true,
+                Scopes = new[] { "scope1", "scope2" },
+                Clock = clock
+            }.FromPrivateKey(PrivateKey);
+            var cred = new ServiceAccountCredential(initializer);
+            Assert.True(cred.HasExplicitScopes); // Must be false for the remainder of this test to be valid.
+            Assert.True(cred.UseJwtAccessWithScope);
+
+            var jwt0 = await cred.GetAccessTokenForRequestAsync("uri0");
+            byte[] decoded = TokenEncodingHelpers.Base64UrlDecode(jwt0.Split(new char[] { '.' })[1]);
+            string payload = System.Text.Encoding.UTF8.GetString(decoded);
+            Assert.Contains("\"scope\":\"scope1 scope2\"", payload);
+            Assert.DoesNotContain("aud", payload);
+        }
+
         private class DummyAccessMethod : IAccessMethod
         {
             public string GetAccessToken(HttpRequestMessage request) => throw new NotImplementedException();
