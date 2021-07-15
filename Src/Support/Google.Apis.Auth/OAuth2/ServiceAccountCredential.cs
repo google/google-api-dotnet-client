@@ -276,7 +276,7 @@ namespace Google.Apis.Auth.OAuth2
             // See: https://developers.google.com/identity/protocols/oauth2/service-account#jwt-auth
             if (!HasExplicitScopes && authUri == null)
             {
-                throw new InvalidOperationException("Invalid OAuth scope or ID token audience provided. A valid authUri and/or OAuth scope is required to proceed.");
+                throw new GoogleApiException(string.Empty, "Invalid OAuth scope or ID token audience provided. A valid authUri and/or OAuth scope is required to proceed.");
             }
             // See: https://google.aip.dev/auth/4111
             if (UseJwtAccessWithScope || !HasExplicitScopes)
@@ -364,8 +364,8 @@ namespace Google.Apis.Auth.OAuth2
                 var expiryUtc = nowUtc + JwtLifetime;
                 Task<string> jwtTask = Task.Run(() =>
                     HasExplicitScopes
-                    ? CreateJwtAccessToken(Scopes, nowUtc, expiryUtc)
-                    : CreateJwtAccessToken(authUri, nowUtc, expiryUtc));
+                    ? CreateJwtAccessTokenWithScopes(Scopes, nowUtc, expiryUtc)
+                    : CreateJwtAccessTokenWithAudience(authUri, nowUtc, expiryUtc));
                 var jwtNode = _jwts.AddFirst(new JwtCacheEntry(jwtTask, authUri, expiryUtc));
                 _jwtCache.Add(authUri, jwtNode);
                 // If cache is too large, remove oldest JWT (for any uri)
@@ -399,7 +399,6 @@ namespace Google.Apis.Auth.OAuth2
 
             return CreateAssertionFromPayload(payload);
         }
-
 
         /// <param name="scopes">A list of the permissions the application requests.</param>
         /// <param name="issueUtc">The issue time of the JWT.</param>
