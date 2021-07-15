@@ -393,7 +393,7 @@ namespace Google.Apis.Auth.OAuth2
         /// <param name="issueUtc">The issue time of the JWT.</param>
         /// <param name="expiryUtc">The expiry time of the JWT.</param>
         /// </summary>
-        private string CreateJwtAccessToken(string authUri, DateTime issueUtc, DateTime expiryUtc)
+        private string CreateJwtAccessTokenWithAudience(string authUri, DateTime issueUtc, DateTime expiryUtc)
         {
             var payload = new JsonWebSignature.Payload()
             {
@@ -411,10 +411,10 @@ namespace Google.Apis.Auth.OAuth2
         /// <param name="scopes">A list of the permissions the application requests.</param>
         /// <param name="issueUtc">The issue time of the JWT.</param>
         /// <param name="expiryUtc">The expiry time of the JWT.</param>
-        /// <inheritdoc cref="CreateJwtAccessToken(string, DateTime, DateTime)"/>
-        private string CreateJwtAccessToken(IEnumerable<String> scopes, DateTime issueUtc, DateTime expiryUtc)
+        /// <inheritdoc cref="CreateJwtAccessTokenWithAudience(string, DateTime, DateTime)"/>
+        private string CreateJwtAccessTokenWithScopes(IEnumerable<String> scopes, DateTime issueUtc, DateTime expiryUtc)
         {
-            var payload = new JsonWebSignature.Payload()
+            var payload = new GoogleJsonWebSignature.Payload()
             {
                 Issuer = Id,
                 Subject = Id,

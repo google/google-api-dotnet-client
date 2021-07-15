@@ -231,6 +231,12 @@ namespace Google.Apis.Auth
         public class Payload : JsonWebSignature.Payload
         {
             /// <summary>
+            /// A space-delimited list of the permissions the application requests or <c>null</c>.
+            /// </summary>
+            [Newtonsoft.Json.JsonProperty("scope")]
+            public string Scope { get; set; }
+
+            /// <summary>
             /// The email address of the user for which the application is requesting delegated access.
             /// </summary>
             [Newtonsoft.Json.JsonProperty("prn")]
