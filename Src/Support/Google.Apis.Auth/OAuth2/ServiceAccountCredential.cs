@@ -90,7 +90,7 @@ namespace Google.Apis.Auth.OAuth2
             public string KeyId { get; set; }
 
             /// <summary>
-            /// Gets or sets the flag enforcing use of Self-Signed Jwt when OAuth scopes are set
+            /// Gets or sets the flag preferring use of self-signed JWTs over OAuth tokens when OAuth scopes are explicitly set.
             /// </summary>
             public bool UseJwtAccessWithScope { get; set; }
 
