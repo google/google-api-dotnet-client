@@ -90,7 +90,7 @@ namespace Google.Apis.Auth.OAuth2
             public string KeyId { get; set; }
 
             /// <summary>
-            /// Gets or sets the flag enforcing use of Self-Signed Jwt when OAuth scopes are set
+            /// Gets or sets the flag preferring use of self-signed JWTs over OAuth tokens when OAuth scopes are explicitly set.
             /// </summary>
             public bool UseJwtAccessWithScope { get; set; }
 
@@ -362,17 +362,10 @@ namespace Google.Apis.Auth.OAuth2
                 }
                 // Create a new JWT.
                 var expiryUtc = nowUtc + JwtLifetime;
-                Task<string> jwtTask;
-
-                if (HasExplicitScopes)
-                {
-                    jwtTask = Task.Run(() => CreateJwtAccessToken(Scopes, nowUtc, expiryUtc));
-                }
-                else
-                {
-                    jwtTask = Task.Run(() => CreateJwtAccessToken(authUri, nowUtc, expiryUtc));
-                }
-                
+                Task<string> jwtTask = Task.Run(() =>
+                    HasExplicitScopes
+                    ? CreateJwtAccessToken(Scopes, nowUtc, expiryUtc)
+                    : CreateJwtAccessToken(authUri, nowUtc, expiryUtc));
                 var jwtNode = _jwts.AddFirst(new JwtCacheEntry(jwtTask, authUri, expiryUtc));
                 _jwtCache.Add(authUri, jwtNode);
                 // If cache is too large, remove oldest JWT (for any uri)
