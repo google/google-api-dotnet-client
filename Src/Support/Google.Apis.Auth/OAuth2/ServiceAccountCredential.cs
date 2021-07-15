@@ -362,17 +362,10 @@ namespace Google.Apis.Auth.OAuth2
                 }
                 // Create a new JWT.
                 var expiryUtc = nowUtc + JwtLifetime;
-                Task<string> jwtTask;
-
-                if (HasExplicitScopes)
-                {
-                    jwtTask = Task.Run(() => CreateJwtAccessToken(Scopes, nowUtc, expiryUtc));
-                }
-                else
-                {
-                    jwtTask = Task.Run(() => CreateJwtAccessToken(authUri, nowUtc, expiryUtc));
-                }
-                
+                Task<string> jwtTask = Task.Run(() =>
+                    HasExplicitScopes
+                    ? CreateJwtAccessToken(Scopes, nowUtc, expiryUtc)
+                    : CreateJwtAccessToken(authUri, nowUtc, expiryUtc));
                 var jwtNode = _jwts.AddFirst(new JwtCacheEntry(jwtTask, authUri, expiryUtc));
                 _jwtCache.Add(authUri, jwtNode);
                 // If cache is too large, remove oldest JWT (for any uri)
