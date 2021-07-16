@@ -58,6 +58,7 @@ namespace Google.Apis.Auth.OAuth2
     public class ServiceAccountCredential : ServiceCredential, IOidcTokenProvider, IGoogleCredential, IBlobSigner
     {
         private const string Sha256Oid = "2.16.840.1.101.3.4.2.1";
+        private const string ScopedTokenCacheKey = "SCOPED_TOKEN";
         /// <summary>An initializer class for the service account credential. </summary>
         new public class Initializer : ServiceCredential.Initializer
         {
@@ -92,7 +93,7 @@ namespace Google.Apis.Auth.OAuth2
             /// <summary>
             /// Gets or sets the flag preferring use of self-signed JWTs over OAuth tokens when OAuth scopes are explicitly set.
             /// </summary>
-            public bool UseJwtAccessWithScope { get; set; }
+            public bool UseJwtAccessWithScopes { get; set; }
 
             /// <summary>Constructs a new initializer using the given id.</summary>
             public Initializer(string id)
@@ -113,7 +114,7 @@ namespace Google.Apis.Auth.OAuth2
                 Scopes = other.Scopes;
                 Key = other.Key;
                 KeyId = other.KeyId;
-                UseJwtAccessWithScope = other.UseJwtAccessWithScope;
+                UseJwtAccessWithScopes = other.UseJwtAccessWithScopes;
             }
 
             /// <summary>Extracts the <see cref="Key"/> from the given PKCS8 private key.</summary>
@@ -175,9 +176,9 @@ namespace Google.Apis.Auth.OAuth2
         public string KeyId { get; }
 
         /// <summary>
-        /// Gets the flag indicating whether Self-Signed JWT is going to be used when OAuth scopes are set
+        /// Gets the flag indicating whether Self-Signed JWT should be used when OAuth scopes are set
         /// </summary>
-        public bool UseJwtAccessWithScope { get; }
+        public bool UseJwtAccessWithScopes { get; }
 
         /// <summary>
         /// Returns true if this credential scopes have been explicitly set via this library.
@@ -200,7 +201,7 @@ namespace Google.Apis.Auth.OAuth2
             Scopes = initializer.Scopes?.ToList().AsReadOnly() ?? Enumerable.Empty<string>();
             Key = initializer.Key.ThrowIfNull("initializer.Key");
             KeyId = initializer.KeyId;
-            UseJwtAccessWithScope = initializer.UseJwtAccessWithScope;
+            UseJwtAccessWithScopes = initializer.UseJwtAccessWithScopes;
         }
 
         /// <summary>
@@ -263,9 +264,14 @@ namespace Google.Apis.Auth.OAuth2
 
         /// <summary>
         /// Gets an access token to authorize a request.
-        /// If <paramref name="authUri"/> is set and this credential has no scopes associated
-        /// with it, a locally signed JWT access token for given <paramref name="authUri"/>
-        /// is returned. Otherwise, an OAuth2 access token obtained from token server will be returned.
+        /// If this credential has <see cref="Scopes"/> associated, but <see cref="UseJwtAccessWithScopes"/> flag
+        /// is not set, an OAuth2 access token obtained from token server will be returned.
+        /// Otherwise, a locally signed JWT access token will be returned. 
+        /// The JWT access token would contain "aud" claim based on <paramref name="authUri"/> if there
+        /// are no <see cref="Scopes"/> associated with the credential or <see cref="UseJwtAccessWithScopes"/> 
+        /// flag is set to false.
+        /// Alternatively, JWT access token would contain "scope" claim based on <see cref="Scopes"/>. 
+        /// The same logic applies when both <paramref name="authUri"/> and <see cref="Scopes"/> are present. 
         /// A cached token is used if possible and the token is only refreshed once it's close to its expiry.
         /// </summary>
         /// <param name="authUri">The URI the returned token will grant access to.</param>
@@ -276,15 +282,16 @@ namespace Google.Apis.Auth.OAuth2
             // See: https://developers.google.com/identity/protocols/oauth2/service-account#jwt-auth
             if (!HasExplicitScopes && authUri == null)
             {
-                throw new GoogleApiException(string.Empty, "Invalid OAuth scope or ID token audience provided. A valid authUri and/or OAuth scope is required to proceed.");
+                throw new GoogleApiException(string.Empty, "Invalid OAuth scope or ID token audience provided. " +
+                    "A valid authUri and/or OAuth scope is required to proceed.");
             }
-            // See: https://google.aip.dev/auth/4111
-            if (UseJwtAccessWithScope || !HasExplicitScopes)
+            if (HasExplicitScopes && !UseJwtAccessWithScopes)
             {
-                return await GetOrCreateJwtAccessTokenAsync(authUri).ConfigureAwait(false);
+                return await base.GetAccessTokenForRequestAsync(authUri, cancellationToken).ConfigureAwait(false);
             }
 
-            return await base.GetAccessTokenForRequestAsync(authUri, cancellationToken).ConfigureAwait(false);
+            // See: https://google.aip.dev/auth/4111
+            return await GetOrCreateJwtAccessTokenAsync(authUri).ConfigureAwait(false);
         }
 
         /// <inheritdoc/>
@@ -348,7 +355,9 @@ namespace Google.Apis.Auth.OAuth2
                     _jwtCache = new Dictionary<string, LinkedListNode<JwtCacheEntry>>();
                     _jwts = new LinkedList<JwtCacheEntry>();
                 }
-                if (_jwtCache.TryGetValue(authUri, out var cachedJwtNode))
+
+                string jwtKey = HasExplicitScopes ? ScopedTokenCacheKey : authUri;
+                if (_jwtCache.TryGetValue(jwtKey, out var cachedJwtNode))
                 {
                     var jwtEntry = cachedJwtNode.Value;
                     if (jwtEntry.ExpiryUtc - JwtCacheExpiryWindow > nowUtc)
@@ -357,7 +366,7 @@ namespace Google.Apis.Auth.OAuth2
                         return jwtEntry.JwtTask;
                     }
                     // Cached JWT is expired; remove it.
-                    _jwtCache.Remove(authUri);
+                    _jwtCache.Remove(jwtKey);
                     _jwts.Remove(cachedJwtNode);
                 }
                 // Create a new JWT.
@@ -366,8 +375,8 @@ namespace Google.Apis.Auth.OAuth2
                     HasExplicitScopes
                     ? CreateJwtAccessTokenWithScopes(Scopes, nowUtc, expiryUtc)
                     : CreateJwtAccessTokenWithAudience(authUri, nowUtc, expiryUtc));
-                var jwtNode = _jwts.AddFirst(new JwtCacheEntry(jwtTask, authUri, expiryUtc));
-                _jwtCache.Add(authUri, jwtNode);
+                var jwtNode = _jwts.AddFirst(new JwtCacheEntry(jwtTask, jwtKey, expiryUtc));
+                _jwtCache.Add(jwtKey, jwtNode);
                 // If cache is too large, remove oldest JWT (for any uri)
                 if (_jwtCache.Count > JwtCacheMaxSize)
                 {
